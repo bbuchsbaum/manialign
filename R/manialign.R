@@ -1,6 +1,15 @@
 
+## https://math.stackexchange.com/questions/1106343/generalized-eigenvalue-problem-for-symmetric-low-rank-matrix
 
+geig <- function(A, B, ncomp=min(3,dim(A)), which="LM") {
 
+  Xprime <- Diagonal(x=1/sqrt(diag(B)))
+  #C  <- t(Xprime) %*% A %*% Xprime
+  CC <- crossprod(Xprime, A) %*% Xprime
+  eres <- eigs(CC,symmetric=TRUE, k=ncomp, which=which)
+  XX <- Xprime %*% eres$vectors
+  list(vectors=XX, values=eres$values, ncomp=ncomp)
+}
 
 
 
@@ -36,7 +45,9 @@ pairwise_id_matrix <- function(Ids, offsets, lens) {
       if (i == j) {
         NULL
       } else {
-        m <- neighborweights:::label_matrix(Ids[[i]], Ids[[j]], type="s", return_matrix=FALSE, dim1=lens[i], dim2=lens[j])
+        m <- neighborweights:::label_matrix(Ids[[i]], Ids[[j]],
+                                            type="s", return_matrix=FALSE,
+                                            dim1=lens[i], dim2=lens[j])
         m[,1] <- m[,1] + offsets[i]
         m[,2] <- m[,2] + offsets[j]
         m
@@ -50,7 +61,7 @@ pairwise_id_matrix <- function(Ids, offsets, lens) {
 }
 
 #' @export
-predict.mani_align_correspondence(x, newdata, table_index, ncomp=x$ncomp) {
+predict.mani_align_correspondence <- function(x, newdata, table_index, ncomp=x$ncomp) {
   ncomp <- min(x$ncomp, ncomp)
   ind <- x$block_indices[[table_index]]
   proj <- x$vectors[ind, 1:ncomp]
@@ -58,15 +69,18 @@ predict.mani_align_correspondence(x, newdata, table_index, ncomp=x$ncomp) {
 }
 
 
-gen_correspondence_laplacian <- function(Xs, id_set, sigma=.73) {
+gen_correspondence_laplacian <- function(Xs, id_set, k=10, sigma=.73) {
+
   ninstances <- unlist(lapply(Xs, ncol))
   nsets <- length(Xs)
   offsets <- cumsum(c(0, ninstances[1:(nsets-1)]))
+  message("setting up id matrix")
   Wc <- pairwise_id_matrix(id_set, offsets, lens=ninstances)
-  Ws <- Matrix::bdiag(lapply(Xs, function(x)
-    neighborweights::similarity_matrix(t(x),
-                                        neighbor_mode="knn",
-                                        k=knn, sigma=sigma)))
+  message("computing knn")
+  Ws <- Matrix::bdiag(lapply(Xs, function(x) {
+    message("sim mat")
+    neighborweights::similarity_matrix(t(x),neighbor_mode="knn",k=knn, sigma=sigma)
+  }))
 
   Ds <- Diagonal(x=rowSums(Ws))
   #Di <- Diagonal(x=rep(1, nrow(Ws)))
@@ -86,10 +100,11 @@ gen_correspondence_laplacian <- function(Xs, id_set, sigma=.73) {
 #' @param u2 the weight placed on alignment.
 #' @importFrom neighborweights similarity_matrix
 mani_align_instances <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, u2=.5) {
-  C <- gen_correspondence_laplacian(Xs, id_set, sigma)
+  C <- gen_correspondence_laplacian(Xs, id_set, k=knn, sigma)
   Ls <- C$Ds - C$Ws
   L <- u2*Ls + u1*C$Omega -u1*C$Wc
 
+  geig(L, C$Ds, ncomp=ncomp)
   #Matrix::nearPD(L)
   decomp <- RSpectra::eigs(solve(C$Ds, L), ncomp)
   ret <- list(vectors=decomp$vectors,
