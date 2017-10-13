@@ -1,12 +1,13 @@
 
 ## https://math.stackexchange.com/questions/1106343/generalized-eigenvalue-problem-for-symmetric-low-rank-matrix
 
-geig <- function(A, B, ncomp=min(3,dim(A)), which="LM") {
+
+geig <- function(A, B, ncomp=min(3,dim(A)), which="LA") {
 
   Xprime <- Diagonal(x=1/sqrt(diag(B)))
   #C  <- t(Xprime) %*% A %*% Xprime
   CC <- crossprod(Xprime, A) %*% Xprime
-  eres <- eigs(CC,symmetric=TRUE, k=ncomp, which=which)
+  eres <- eigs_sym(CC,symmetric=TRUE, k=ncomp, which=which)
   XX <- Xprime %*% eres$vectors
   list(vectors=XX, values=eres$values, ncomp=ncomp)
 }
