@@ -168,7 +168,10 @@ mani_align_labeled <- function(Xs, label_set, ncomp=2, knn=5, sigma=.73, u1=1, u
   Wd <- pairwise_label_matrix(label_set, offsets, type="d")
 
   neighborweights::construct_weight_matrix(x, neighbor_mode="knn", k=knn, sigma=sigma)
-  W <- bdiag(lapply(Xs, function(x) neighborweights::construct_weight_matrix(x, neighbor_mode="knn", k=knn, sigma=sigma)))
+
+  W <- bdiag(lapply(Xs, function(x) neighborweights::construct_weight_matrix(x,
+                                                                             neighbor_mode="knn",
+                                                                             k=knn, sigma=sigma)))
 
   Ds <- Diagonal(x=rowSums(Ws))
   Dd <- Diagonal(x=rowSums(Wd))
