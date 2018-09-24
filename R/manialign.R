@@ -167,6 +167,8 @@ mani_align_features <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, u
 
 #' @export
 mani_align_labeled <- function(Xs, label_set, ncomp=2, knn=5, sigma=.73, u1=1, u2=1, simfun=NULL, distfun=NULL) {
+  assert_that(length(Xs) == legnth(label_set))
+
   ninstances <- unlist(lapply(Xs, ncol))
   nsets <- length(Xs)
 

@@ -66,20 +66,24 @@ distfun <- function(x1, x2) {
 }
 
 
+save_roi <- function(rnum) {
+
+  Xl <- do.call(rbind, lapply(1:length(sids), function(i) {
+    fn <- fnames[i]
+    s <- sids[i]
+    fh5 <- H5File$new(fn, mode="r")
+    labs <- fh5[[paste0(rnum, "/nback/labels")]][]
+    mat <- fh5[[paste0(rnum, "/nback/data")]][,]
+    smat <- scale(t(scale(t(mat))))
+    ret <- tibble(sid=s, labs=list(labs), X=list(smat))
+    fh5$close()
+    ret
+  }))
+
+  saveRDS(Xl, paste0("~/Dropbox/code/neuroca/testdata/hyper_", rnum, "_nback.rds"))
+
+}
 
 
-Xl <- do.call(rbind, lapply(1:length(sids), function(i) {
-  fn <- fnames[i]
-  s <- sids[i]
-  fh5 <- H5File$new(fn, mode="r")
-  labs <- fh5[["11120/nback/labels"]][]
-  mat <- fh5[["11120/nback/data"]][,]
-  smat <- scale(t(scale(t(mat))))
-  ret <- tibble(sid=s, labs=list(labs), X=list(smat))
-  fh5$close()
-  ret
-}))
-
-
-Xs <- Xl[["X"]][1:10]
-labs <- Xl[["labs"]][1:10]
+Xs <- Xl[["X"]]
+labs <- Xl[["labs"]]
