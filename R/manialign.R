@@ -7,7 +7,7 @@ geig <- function(A, B, ncomp=min(3,dim(A)), which="LA") {
   Xprime <- Diagonal(x=1/sqrt(diag(B)))
   #C  <- t(Xprime) %*% A %*% Xprime
   CC <- crossprod(Xprime, A) %*% Xprime
-  eres <- eigs_sym(CC,symmetric=TRUE, k=ncomp, which=which)
+  eres <- RSpectra::eigs_sym(CC,symmetric=TRUE, k=ncomp, which=which)
   XX <- Xprime %*% eres$vectors
   list(vectors=XX, values=eres$values, ncomp=ncomp)
 }
@@ -15,15 +15,20 @@ geig <- function(A, B, ncomp=min(3,dim(A)), which="LA") {
 
 
 
-#' pairwise_id_matrix
+#' pairwise_label_matrix
 #'
 #'
+#' @param a list of labels
+#' @param offsets a vector of offsets indicating the start index of each block
+#' @param type 's' or 'd' for label similarity or dissimilarity
+#' @param simfun an optional similarity function to compute the weight between label_i and label_j
 #' @export
-pairwise_label_matrix <- function(Ls, offsets, type="s") {
+pairwise_label_matrix <- function(Ls, offsets, type="s", simfun=NULL) {
 
   out <- do.call(rbind, lapply(1:length(Ls), function(i) {
+    print(i)
     do.call(rbind, lapply(1:length(Ls), function(j) {
-      m <- neiborweights:::label_matrix(Ls[[i]], Ls[[j]], type=type, return_matrix=FALSE)
+      m <- neighborweights:::label_matrix(Ls[[i]], Ls[[j]], type=type, simfun=simfun, return_matrix=FALSE)
       m[,1] <- m[,1] + offsets[i]
       m[,2] <- m[,2] + offsets[j]
       m
@@ -70,17 +75,24 @@ predict.mani_align_correspondence <- function(x, newdata, table_index, ncomp=x$n
 }
 
 
+#' @param Xs a list of data matrices where each element is an n_feature by n_instance \code{matrix}.
+#' @param id_set a set of instance indices
+#' @param k the number of nearest neighbors to include
+#' @param sigma the heat kernel parameter for weighted nearest neighbor calculation
+#' @keywords internal
 gen_correspondence_laplacian <- function(Xs, id_set, k=10, sigma=.73) {
 
   ninstances <- unlist(lapply(Xs, ncol))
   nsets <- length(Xs)
   offsets <- cumsum(c(0, ninstances[1:(nsets-1)]))
+
   message("setting up id matrix")
   Wc <- pairwise_id_matrix(id_set, offsets, lens=ninstances)
   message("computing knn")
+
   Ws <- Matrix::bdiag(lapply(Xs, function(x) {
     message("sim mat")
-    neighborweights::similarity_matrix(t(x),neighbor_mode="knn",k=knn, sigma=sigma)
+    neighborweights::edge_weights(t(x),neighbor_mode="knn",k=knn, sigma=sigma)
   }))
 
   Ds <- Diagonal(x=rowSums(Ws))
@@ -121,11 +133,11 @@ mani_align_instances <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, 
   ret
 }
 
-
+#' @inheritParams mani_align_instances
 #' @export
 #' @importFrom neighborweights similarity_matrix
 mani_align_features <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, u2=.5) {
-  C <- gen_correspondence_laplacian(Xs, id_set, sigma)
+  C <- gen_correspondence_laplacian(Xs, id_set, k=knn, sigma)
 
 
   Ls <- C$Ds - C$Ws
@@ -154,8 +166,8 @@ mani_align_features <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, u
 
 
 #' @export
-mani_align_labeled <- function(Xs, label_set, ncomp=2, knn=5, sigma=.73, u1=1, u2=1) {
-  ninstances <- unlist(lapply(Xs, nrow))
+mani_align_labeled <- function(Xs, label_set, ncomp=2, knn=5, sigma=.73, u1=1, u2=1, simfun=NULL, distfun=NULL) {
+  ninstances <- unlist(lapply(Xs, ncol))
   nsets <- length(Xs)
 
   offsets <- cumsum(c(0, ninstances[1:(nsets-1)]))
@@ -164,14 +176,15 @@ mani_align_labeled <- function(Xs, label_set, ncomp=2, knn=5, sigma=.73, u1=1, u
     seq(offsets[i] + 1, offsets[i] + ninstances[i])
   })
 
-  Ws <- pairwise_label_matrix(label_set, offsets, type="s")
-  Wd <- pairwise_label_matrix(label_set, offsets, type="d")
+  Ws <- pairwise_label_matrix(label_set, offsets, type="s", simfun=simfun)
+  Wd <- pairwise_label_matrix(label_set, offsets, type="d", simfun=distfun)
 
-  neighborweights::construct_weight_matrix(x, neighbor_mode="knn", k=knn, sigma=sigma)
 
-  W <- bdiag(lapply(Xs, function(x) neighborweights::construct_weight_matrix(x,
+  W <- bdiag(lapply(Xs, function(x) neighborweights::edge_weights(t(x),
+                                                                             weight_mode="normalized",
                                                                              neighbor_mode="knn",
-                                                                             k=knn, sigma=sigma)))
+                                                                             k=knn,
+                                                                             sigma=.73)))
 
   Ds <- Diagonal(x=rowSums(Ws))
   Dd <- Diagonal(x=rowSums(Wd))
@@ -186,7 +199,8 @@ mani_align_labeled <- function(Xs, label_set, ncomp=2, knn=5, sigma=.73, u1=1, u
   Zl <- Z %*% (u1*Ls + u2*L) %*% t(Z)
   Zr <- Z %*% Ld %*% t(Z)
 
-  decomp <- eigen(solve(Zr,Zl) )
+  #decomp <- eigen(solve(Zr,Zl) )
+  decomp <- geig(Zl,Zr, which="SM")
   ret <- list(vectors=decomp$vectors,
        values=decomp$values,
        block_indices=block_indices,
