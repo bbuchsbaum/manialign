@@ -15,6 +15,7 @@ geig <- function(A, B, ncomp=min(3,dim(A)), which="LA") {
 
 
 
+
 #' pairwise_label_matrix
 #'
 #'
@@ -28,7 +29,7 @@ pairwise_label_matrix <- function(Ls, offsets, type="s", simfun=NULL) {
   out <- do.call(rbind, lapply(1:length(Ls), function(i) {
     print(i)
     do.call(rbind, lapply(1:length(Ls), function(j) {
-      m <- neighborweights:::label_matrix(Ls[[i]], Ls[[j]], type=type, simfun=simfun, return_matrix=FALSE)
+      m <- neighborweights:::label_matrix2(Ls[[i]], Ls[[j]], type=type, simfun=simfun, return_matrix=FALSE)
       m[,1] <- m[,1] + offsets[i]
       m[,2] <- m[,2] + offsets[j]
       m
@@ -92,7 +93,7 @@ gen_correspondence_laplacian <- function(Xs, id_set, k=10, sigma=.73) {
 
   Ws <- Matrix::bdiag(lapply(Xs, function(x) {
     message("sim mat")
-    neighborweights::edge_weights(t(x),neighbor_mode="knn",k=knn, sigma=sigma)
+    neighborweights::graph_weights(t(x),neighbor_mode="knn",k=k, sigma=sigma)
   }))
 
   Ds <- Diagonal(x=rowSums(Ws))
@@ -135,10 +136,24 @@ mani_align_instances <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, 
 
 #' @inheritParams mani_align_instances
 #' @export
-#' @importFrom neighborweights similarity_matrix
+#' @importFrom neighborweights graph_weights
+#' @examples
+#'
+#' mm <- read.csv("https://stats.idre.ucla.edu/stat/data/mmreg.csv")
+#' colnames(mm) <- c("Control", "Concept", "Motivation", "Read", "Write", "Math", "Science", "Sex")
+#' psych <- mm[, 1:3]
+#' acad <- mm[, 4:8]
+#'
+#' cc1 <- cancor(psych, acad)
+#' A = list(psych, acad)
+#' C = matrix(c(1, 1, 1, 1), 2,2)
+#' result.rgcca = rgcca(A, C, scale = FALSE)
+#' id_set <- lapply(A, row.names)
+#' Xs <- lapply(A, scale, scale=FALSE)
+#' Xs <- lapply(Xs, t)
+#'
 mani_align_features <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, u2=.5) {
   C <- gen_correspondence_laplacian(Xs, id_set, k=knn, sigma)
-
 
   Ls <- C$Ds - C$Ws
   L <- u2*Ls + u1*C$Omega -u1*C$Wc
@@ -148,7 +163,9 @@ mani_align_features <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, u
   Zl <- Z %*% L %*% t(Z)
   Zr <- Z %*% C$Ds %*% t(Z)
 
-  decomp <- eigen(solve(Matrix::nearPD(Zr)$mat, Matrix::nearPD(Zl)$mat ))
+  decomp <- geig(Zl,Zr, which="SM")
+  g2 <- eigen(solve(Zr,Zl) )
+  g <- geigen(as.matrix(Zl), as.matrix(Zr))
 
   ret <- list(vectors=decomp$vectors,
               values=decomp$values,
