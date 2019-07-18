@@ -152,6 +152,13 @@ mani_align_instances <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, 
 #' Xs <- lapply(A, scale, scale=FALSE)
 #' Xs <- lapply(Xs, t)
 #'
+#' pop <- LifeCycleSavings[, 2:3]
+#' oec <- LifeCycleSavings[, -(2:3)]
+#' cc2 <- cancor(pop, oec)
+#'
+#' Xs <- lapply(list(pop, oec), scale, scale=TRUE)
+#' Xs <- lapply(Xs, t)
+#' id_set <- lapply(Xs, colnames)
 mani_align_features <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, u2=.5) {
   C <- gen_correspondence_laplacian(Xs, id_set, k=knn, sigma)
 
@@ -163,9 +170,9 @@ mani_align_features <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, u
   Zl <- Z %*% L %*% t(Z)
   Zr <- Z %*% C$Ds %*% t(Z)
 
-  decomp <- geig(Zl,Zr, which="SM")
-  g2 <- eigen(solve(Zr,Zl) )
-  g <- geigen(as.matrix(Zl), as.matrix(Zr))
+  #decomp <- geig(Zl,Zr, which="SM")
+  decomp <- RSpectra::eigs(solve(Zr,Zl), k=ncomp, which="SM")
+  #g <- geigen(as.matrix(Zl), as.matrix(Zr))
 
   ret <- list(vectors=decomp$vectors,
               values=decomp$values,
