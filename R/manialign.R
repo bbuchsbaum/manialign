@@ -1,7 +1,30 @@
 
 ## https://math.stackexchange.com/questions/1106343/generalized-eigenvalue-problem-for-symmetric-low-rank-matrix
 
+spsdFaster <- function(K, s) {
+  p <- 4 * s
+  n <- ncol(K)
+  S <- sort(sample(1:n, s))
+  C <- K[, S]
+  QC <- qr(C)$qr
+  q <- rowSums(QC^2)
+  q <- q/sum(q)
+  P <- sample(1:n, p, TRUE, prob=q)
+  P <- unique(c(P, S))
+  PQCinv <- corpcor::pseudoinverse(QC[P,])
+  Z <- PQCinv %*% K[P,P] %*% t(PQCinv)
+}
 
+
+geig2 <- function(A, B, k=2) {
+  B_decomp <- eigen(B)
+  Bp <- B_decomp$vectors %*% diag(1/sqrt(B_decomp$values))
+  Ap <- t(Bp) %*% A %*% Bp
+  #A_decomp <- eigen(Ap)
+  A_decomp <- RSpectra::eigs(Ap, which="SM", k=k)
+  vecs <- Bp %*% A_decomp$vectors
+  list(vectors=vecs, values=A_decomp$values)
+}
 geig <- function(A, B, ncomp=min(3,dim(A)), which="LA") {
 
   Xprime <- Diagonal(x=1/sqrt(diag(B)))
@@ -156,7 +179,7 @@ mani_align_instances <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, 
 #' oec <- LifeCycleSavings[, -(2:3)]
 #' cc2 <- cancor(pop, oec)
 #'
-#' Xs <- lapply(list(pop, oec), scale, scale=TRUE)
+#' Xs <- lapply(list(pop, oec), scale, scale=FALSE)
 #' Xs <- lapply(Xs, t)
 #' id_set <- lapply(Xs, colnames)
 mani_align_features <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, u2=.5) {
@@ -172,8 +195,8 @@ mani_align_features <- function(Xs, id_set, ncomp=2, knn=10, sigma=.73, u1=.5, u
 
   #decomp <- geig(Zl,Zr, which="SM")
   decomp <- RSpectra::eigs(solve(Zr,Zl), k=ncomp, which="SM")
-  #g <- geigen(as.matrix(Zl), as.matrix(Zr))
-
+  g <- geigen(as.matrix(Zl), as.matrix(Zr))
+  g2 <- geig2(Zl, Zr)
   ret <- list(vectors=decomp$vectors,
               values=decomp$values,
               block_indices=block_indices,
